@@ -16,7 +16,10 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 class TestLoggingCommand extends Command
 {
     public function __construct(
-        private readonly LoggerInterface $logger
+        private readonly LoggerInterface $logger,
+        #[Autowire(service: 'monolog.logger.trading')] private readonly LoggerInterface $tradingLogger,
+        #[Autowire(service: 'monolog.logger.api')] private readonly LoggerInterface $apiLogger,
+        #[Autowire(service: 'monolog.logger.budget')] private readonly LoggerInterface $budgetLogger,
     ) {
         parent::__construct();
     }
@@ -31,86 +34,76 @@ class TestLoggingCommand extends Command
             
             $testId = uniqid('test_');
             
-            // Test all log levels
-            $this->logger->debug("DEBUG message (test_id: {$testId})", [
-                'level' => 'debug',
-                'context' => 'testing'
+            // Default app channel
+            $this->logger->info("Default [app] channel log (test_id: {$testId})");
+            $io->info('✓ Default [app] channel log written');
+
+            // Trading channel
+            $this->tradingLogger->info("Trading channel log (test_id: {$testId})", [
+                'operation' => 'buy',
+                'item' => 'AWP | Dragon Lore',
+                'price' => 10000,
             ]);
-            $io->info('✓ DEBUG log written');
-            
-            $this->logger->info("INFO message (test_id: {$testId})", [
-                'level' => 'info',
-                'context' => 'testing'
-            ]);
-            $io->info('✓ INFO log written');
-            
-            $this->logger->notice("NOTICE message (test_id: {$testId})", [
-                'level' => 'notice',
-                'context' => 'testing'
-            ]);
-            $io->info('✓ NOTICE log written');
-            
-            $this->logger->warning("WARNING message (test_id: {$testId})", [
-                'level' => 'warning',
-                'context' => 'testing'
-            ]);
-            $io->info('✓ WARNING log written');
-            
-            $this->logger->error("ERROR message (test_id: {$testId})", [
-                'level' => 'error',
-                'context' => 'testing'
-            ]);
-            $io->info('✓ ERROR log written');
-            
-            $this->logger->critical("CRITICAL message (test_id: {$testId})", [
-                'level' => 'critical',
-                'context' => 'testing'
-            ]);
-            $io->info('✓ CRITICAL log written');
-            
-            // Test 2: Structured logging
-            $io->section('Test 2: Structured Logging');
-            
-            $this->logger->info('Simulating API call', [
+            $io->info('✓ Trading channel log written');
+
+            // API channel
+            $this->apiLogger->info("API channel log (test_id: {$testId})", [
                 'endpoint' => '/GetBalance',
                 'method' => 'POST',
-                'duration_ms' => 245,
+                'status_code' => 200,
+            ]);
+            $io->info('✓ API channel log written');
+
+            // Budget channel
+            $this->budgetLogger->warning("Budget channel log (test_id: {$testId})", [
+                'balance' => 50.0,
+                'threshold' => 100.0,
+            ]);
+            $io->info('✓ Budget channel log written');
+
+            // Test 2: Structured logging
+            $io->section('Test 2: Structured Logging');
+            $this->apiLogger->info('Structured API log', [
+                'endpoint' => '/GetInventory',
+                'method' => 'POST',
+                'duration_ms' => 123,
                 'status_code' => 200,
                 'test_id' => $testId
             ]);
-            $io->success('✓ Structured log with context written');
-            
+            $io->success('✓ Structured log with context written to API channel');
+
             // Test 3: Exception logging
             $io->section('Test 3: Exception Logging');
-            
             try {
                 throw new \RuntimeException('Test exception for logging');
             } catch (\Throwable $e) {
-                $this->logger->error('Caught test exception', [
+                $this->tradingLogger->error('Caught test exception in trading channel', [
                     'exception' => $e->getMessage(),
                     'file' => $e->getFile(),
                     'line' => $e->getLine(),
                     'test_id' => $testId
                 ]);
-                $io->success('✓ Exception logged');
+                $io->success('✓ Exception logged to trading channel');
             }
-            
+
             // Summary
             $io->newLine();
             $io->success('✓ All logging tests completed!');
-            
+
             $io->section('How to View Logs');
             $io->listing([
-                'Development: var/log/dev.log',
-                'Production: var/log/prod.log',
+                'Default: var/log/dev.log',
+                'Trading: var/log/trading.log',
+                'API: var/log/api.log',
+                'Budget: var/log/budget.log',
                 'Or check your monolog configuration in config/packages/monolog.yaml',
             ]);
-            
+
             $io->note("Search for test_id '{$testId}' in your logs to find these test messages");
-            
+
             $io->newLine();
             $io->info('Run this to view recent logs:');
-            $io->writeln('  tail -f var/log/dev.log');
+            $io->writeln('  tail -f var/log/dev.log var/log/trading.log var/log/api.log var/log/budget.log');
 
             return Command::SUCCESS;
 

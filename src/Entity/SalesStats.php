@@ -18,17 +18,21 @@ class SalesStats
     #[ORM\Column]
     private ?int $id = null;
 
+    /**
+     * Full market hash name including wear category
+     * e.g., "AK-47 | Redline (Field-Tested)"
+     */
     #[ORM\Column(length: 255, unique: true)]
     private string $marketHashName;
 
     /**
-     * Average price over last 7 days
+     * Average price over last 7 days (from actual sales)
      */
     #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 2, nullable: true)]
     private ?string $avgPrice7d = null;
 
     /**
-     * Average price over last 30 days
+     * Average price over last 30 days (from actual sales)
      */
     #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 2, nullable: true)]
     private ?string $avgPrice30d = null;
@@ -40,35 +44,59 @@ class SalesStats
     private ?string $medianPrice30d = null;
 
     /**
-     * Lowest price in last 30 days
+     * Lowest sale price in last 30 days
      */
     #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 2, nullable: true)]
     private ?string $minPrice30d = null;
 
     /**
-     * Highest price in last 30 days
+     * Highest sale price in last 30 days
      */
     #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 2, nullable: true)]
     private ?string $maxPrice30d = null;
 
     /**
-     * Standard deviation of price (volatility indicator)
+     * Standard deviation of sale prices (volatility indicator)
      * Higher = more volatile = higher risk
      */
     #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 2, nullable: true)]
     private ?string $priceVolatility = null;
 
     /**
-     * Number of price data points used for calculations
+     * Number of sales in last 7 days (liquidity indicator)
+     */
+    #[ORM\Column(type: Types::INTEGER)]
+    private int $salesCount7d = 0;
+
+    /**
+     * Number of sales in last 30 days (liquidity indicator)
+     */
+    #[ORM\Column(type: Types::INTEGER)]
+    private int $salesCount30d = 0;
+
+    /**
+     * Average sales per day (30-day basis)
+     */
+    #[ORM\Column(type: Types::DECIMAL, precision: 5, scale: 2, nullable: true)]
+    private ?string $avgSalesPerDay = null;
+
+    /**
+     * Number of sale data points used for calculations
      */
     #[ORM\Column(type: Types::INTEGER)]
     private int $dataPoints = 0;
 
     /**
-     * Most recent price from price_history
+     * Most recent sale price from sale_history
      */
     #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 2, nullable: true)]
-    private ?string $currentPrice = null;
+    private ?string $lastSalePrice = null;
+
+    /**
+     * Date of most recent sale
+     */
+    #[ORM\Column(type: Types::DATE_IMMUTABLE, nullable: true)]
+    private ?\DateTimeImmutable $lastSaleDate = null;
 
     #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
     private \DateTimeImmutable $createdAt;
@@ -87,6 +115,32 @@ class SalesStats
     public function onPreUpdate(): void
     {
         $this->updatedAt = new \DateTimeImmutable();
+    }
+
+    // Helper methods
+
+    /**
+     * Check if item is liquid enough (minimum 2 sales per day)
+     */
+    public function isLiquid(): bool
+    {
+        return $this->avgSalesPerDay !== null && bccomp($this->avgSalesPerDay, '2.0', 2) >= 0;
+    }
+
+    /**
+     * Check if item is highly liquid (10+ sales per day)
+     */
+    public function isHighlyLiquid(): bool
+    {
+        return $this->avgSalesPerDay !== null && bccomp($this->avgSalesPerDay, '10.0', 2) >= 0;
+    }
+
+    /**
+     * Check if we have enough data for reliable statistics (min 10 sales)
+     */
+    public function hasReliableData(): bool
+    {
+        return $this->salesCount30d >= 10;
     }
 
     // Getters and Setters
@@ -173,6 +227,39 @@ class SalesStats
         return $this;
     }
 
+    public function getSalesCount7d(): int
+    {
+        return $this->salesCount7d;
+    }
+
+    public function setSalesCount7d(int $salesCount7d): self
+    {
+        $this->salesCount7d = $salesCount7d;
+        return $this;
+    }
+
+    public function getSalesCount30d(): int
+    {
+        return $this->salesCount30d;
+    }
+
+    public function setSalesCount30d(int $salesCount30d): self
+    {
+        $this->salesCount30d = $salesCount30d;
+        return $this;
+    }
+
+    public function getAvgSalesPerDay(): ?string
+    {
+        return $this->avgSalesPerDay;
+    }
+
+    public function setAvgSalesPerDay(?string $avgSalesPerDay): self
+    {
+        $this->avgSalesPerDay = $avgSalesPerDay;
+        return $this;
+    }
+
     public function getDataPoints(): int
     {
         return $this->dataPoints;
@@ -184,14 +271,25 @@ class SalesStats
         return $this;
     }
 
-    public function getCurrentPrice(): ?string
+    public function getLastSalePrice(): ?string
     {
-        return $this->currentPrice;
+        return $this->lastSalePrice;
     }
 
-    public function setCurrentPrice(?string $currentPrice): self
+    public function setLastSalePrice(?string $lastSalePrice): self
     {
-        $this->currentPrice = $currentPrice;
+        $this->lastSalePrice = $lastSalePrice;
+        return $this;
+    }
+
+    public function getLastSaleDate(): ?\DateTimeImmutable
+    {
+        return $this->lastSaleDate;
+    }
+
+    public function setLastSaleDate(?\DateTimeImmutable $lastSaleDate): self
+    {
+        $this->lastSaleDate = $lastSaleDate;
         return $this;
     }
 

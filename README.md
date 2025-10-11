@@ -60,7 +60,7 @@ Buy €10 → Must sell €12.94 → Fee €1.94 → Net €11 → Profit €1 (
 
 Only buy items that are:
 1. **Significantly underpriced** (20-30% below average)
-2. **Highly liquid** (30+ sales per day for Tier 1, 10+ for Tier 2)
+2. **Highly liquid** (10+ sales per day minimum)
 3. **Proven to reach target price** (historically reached target 3+ times in 30 days)
 4. **Low risk** (stable prices, good volume, diversified)
 
@@ -111,21 +111,21 @@ Only buy items that are:
 
 ### The Complete Flow
 
-**Every Hour:**
+**Every Day (3 AM):**
 ```
-1. PriceScraperCommand runs
-   → Fetches all prices from SkinBaron API
-   → Stores in price_history table
-   → Updates Redis cache
-   → Finishes (30 seconds)
+1. SalesHistoryFetcherCommand runs
+   → Calls /GetNewestSales30Days for each whitelisted item
+   → Stores actual sales data in sale_history table
+   → Finishes (5-10 minutes for 30 items)
 ```
 
-**Every 30 Minutes:**
+**Every 6 Hours:**
 ```
 2. StatsCalculatorCommand runs
-   → Calculates averages, volatility, sales velocity
+   → Calculates averages, volatility, sales velocity from sale_history
+   → Groups by wear tiers (low/mid/high float)
    → Updates sales_stats table
-   → Finishes (20 seconds)
+   → Finishes (30 seconds)
 ```
 
 **Every 15 Minutes:**
@@ -135,7 +135,7 @@ Only buy items that are:
    → Searches SkinBaron for each
    → Evaluates each listing (8 checks):
       • Whitelisted and active? ✓
-      • 20%+ below average? ✓
+      • 20%+ below wear-adjusted average? ✓
       • Good spread to next listing? ✓
       • Can we afford it? ✓
       • Portfolio limits OK? ✓
@@ -217,7 +217,7 @@ Only buy items that are:
 **Purpose:** Pre-approved items for trading (manually curated by you)
 
 **Key Fields:**
-- market_hash_name: "AK-47 | Redline (Field-Tested)"
+- market_hash_name: "AK-47 | Redline (Field-Tested)" (includes wear category)
 - tier: 1 or 2
 - min_discount_pct: Minimum discount to buy (20% for Tier 1, 25% for Tier 2)
 - min_spread_pct: Minimum spread to next listing (15%)
@@ -227,37 +227,68 @@ Only buy items that are:
 
 **How to populate:** 
 - Start with 20-30 liquid items you research
+- Each wear category is a separate entry (e.g., whitelist both FT and MW variants separately)
 - Use SQL inserts or database seeder
 - Add/remove based on performance
 
-### 2. price_history
-**Purpose:** Time-series price data
+**Example entries:**
+```sql
+INSERT INTO whitelisted_items (market_hash_name, tier, min_discount_pct) VALUES
+('AK-47 | Redline (Field-Tested)', 1, 20),
+('AK-47 | Redline (Minimal Wear)', 1, 20),
+('AWP | Asiimov (Field-Tested)', 1, 20),
+('M4A4 | Desolate Space (Field-Tested)', 2, 25);
+```
+
+### 2. sale_history
+**Purpose:** Time-series data of actual completed sales (NOT listing prices)
 
 **Key Fields:**
-- market_hash_name
-- price
-- timestamp
+- market_hash_name: Full name including wear (e.g., "AK-47 | Redline (Field-Tested)")
+- price: Actual sale price
+- date_sold: When the item was sold
+- fetched_at: When we retrieved this data (for deduplication)
 
-**Why:** Calculate averages, trends, volatility. Identify good buy prices.
+**Why:** Track actual market activity, calculate realistic averages, measure true liquidity.
 
-**Data Retention:** Keep 90 days of hourly data.
+**Data Source:** `/GetNewestSales30Days` API endpoint (fetched daily)
+
+**Data Retention:** Keep 90 days of sales data.
+
+**Critical Note:** This stores ACTUAL SALES, not current listing prices. This is more reliable because:
+- Sales reflect true market value (what people actually paid)
+- Can calculate sales velocity (how often items sell)
+- Better for historical viability checks (did items actually sell at target price?)
+
+**Wear Categories:** Each wear category is a SEPARATE item:
+- "AK-47 | Redline (Factory New)" - Different item
+- "AK-47 | Redline (Minimal Wear)" - Different item
+- "AK-47 | Redline (Field-Tested)" - Different item
+- "AK-47 | Redline (Well-Worn)" - Different item
+- "AK-47 | Redline (Battle-Scarred)" - Different item
+
+All items with the same market_hash_name are treated identically (no float-based price adjustments).
 
 ### 3. sales_stats
 **Purpose:** Aggregated statistics for quick lookups
 
 **Key Fields:**
-- market_hash_name
+- market_hash_name: Full name including wear category
 - avg_price_7d: 7-day average
 - avg_price_30d: 30-day average
 - price_volatility: Standard deviation (for risk scoring)
+- sales_count_7d: Number of sales in last 7 days
+- sales_count_30d: Number of sales in last 30 days
 
 **Why:** Don't recalculate on every decision. Pre-compute and cache.
+
+**Note:** Each wear category (FN/MW/FT/WW/BS) is a separate item with its own statistics.
 
 ### 4. inventory
 **Purpose:** Track owned items from purchase to sale
 
 **Key Fields:**
-- market_hash_name
+- market_hash_name: Full name including wear category
 - purchase_price
 - purchase_date
 - target_sell_price: Calculated at purchase
@@ -322,8 +353,30 @@ Only buy items that are:
 
 ### SkinBaronClient
 **What:** Wrapper for all API calls
-**Methods:** getExtendedPriceList(), search(), buyItems(), listItems(), getSales(), getBalance()
+**Methods:** 
+- getExtendedPriceList(): Current market prices
+- getNewestSales30Days(itemName): Historical sales data (CRITICAL!)
+- search(): Find listings
+- buyItems(): Purchase
+- listItems(): List for sale
+- editPriceMulti(): Adjust prices
+- getSales(): Your sales
+- getBalance(): Current balance
+
 **Features:** Rate limiting, circuit breaker, retry logic, caching
+
+**Key Endpoint - getNewestSales30Days():**
+```php
+$sales = $client->getNewestSales30Days(
+    itemName: 'AK-47 | Redline (Field-Tested)',
+    statTrak: false
+);
+// Returns: [
+//   ['itemName' => '...', 'price' => 30.00, 'wear' => 0.32, 'dateSold' => '2025-10-11'],
+//   ['itemName' => '...', 'price' => 32.89, 'wear' => 0.29, 'dateSold' => '2025-10-11'],
+//   ... (60 sales)
+// ]
+```
 
 ### BudgetManager
 **What:** Track balance and enforce limits
@@ -339,8 +392,9 @@ Only buy items that are:
 1. Load whitelisted items (your manual list)
 2. Search SkinBaron for each
 3. Evaluate each result (8 checks total)
-4. Calculate risk score
-5. Return approved opportunities
+4. Calculate wear-adjusted discount
+5. Calculate risk score
+6. Return approved opportunities
 **Output:** Array of BuyOpportunity DTOs
 
 ### SellDecisionEngine
@@ -371,11 +425,15 @@ Only buy items that are:
 **Updates:** Inventory table with status and prices
 
 ### StatsCalculator
-**What:** Calculate market statistics
+**What:** Calculate market statistics from sale_history
 **Calculations:**
-- Average prices (7-day, 30-day)
+- Average prices (7-day, 30-day) per market_hash_name
 - Standard deviation (volatility)
+- Sales velocity (count per day)
 **Updates:** sales_stats table
+**Frequency:** Every 6 hours
+
+**Note:** Each wear category is calculated independently since they're separate items.
 
 ### RiskScorer
 **What:** Assess opportunity risk (0-10 scale)
@@ -498,11 +556,14 @@ Is discountPct >= minDiscountPct?
 → Yes: Continue
 
 Example:
-avgPrice7d = €10.50
-currentPrice = €8.20
-discountPct = ((10.50 - 8.20) / 10.50) * 100 = 21.9%
+marketHashName = "AK-47 | Redline (Field-Tested)"
+avgPrice7d = €35.50
+currentPrice = €28.00
+discountPct = ((35.50 - 28.00) / 35.50) * 100 = 21.1%
 minDiscountPct = 20%
-→ PASS (21.9% >= 20%)
+→ PASS (21.1% >= 20%)
+
+Note: All Field-Tested variants are treated the same. Float value doesn't matter.
 ```
 
 **Step 3: Spread Check**
@@ -513,8 +574,8 @@ Is spread >= minSpreadPct?
 → No: REJECT (no room for profit)
 → Yes: Continue
 
-Why: If next listing is €8.21 and current is €8.20,
-there's no spread. Can't resell profitably.
+Why: If next listing is €28.10 and current is €28.00,
+there's minimal spread. Can't resell profitably.
 ```
 
 **Step 4: Budget Check**
@@ -539,15 +600,16 @@ Is count < 3?
 **Step 6: Historical Viability**
 ```
 targetSellPrice = (currentPrice * 1.10) / 0.85
-Query price_history: How many times did price >= targetSellPrice in last 30 days?
+Query sale_history: How many times did price >= targetSellPrice in last 30 days?
 Is count >= 3?
 → No: REJECT (target price unrealistic)
 → Yes: Continue
 
 Example:
-currentPrice = €8.20
-targetSellPrice = (8.20 * 1.10) / 0.85 = €10.61
-Check: Has item reached €10.61+ at least 3 times in last 30 days?
+marketHashName = "AK-47 | Redline (Field-Tested)"
+currentPrice = €28.00
+targetSellPrice = (28.00 * 1.10) / 0.85 = €36.24
+Check: Has "AK-47 | Redline (Field-Tested)" sold at €36.24+ at least 3 times in last 30 days?
 ```
 
 **Step 7: Risk Assessment**
@@ -618,7 +680,7 @@ return opportunity
 **If Status = 'listed' (already on market):**
 
 ```
-1. Fetch cheapest competing listing
+1. Fetch cheapest competing listing (same market_hash_name)
 2. Calculate holdDays
 
 3. Check: Is our price competitive?
@@ -800,23 +862,38 @@ Available = 100 - 20 - 10 = €70
 ---
 
 ### Phase 2: Data Collection (Week 2)
-**Goal:** Build price history database
+**Goal:** Build sales history database from actual market data
 
 **Build:**
-1. PriceScraperCommand (fetch prices hourly)
-2. StatsCalculatorCommand (calculate stats every 30 min)
+1. SalesHistoryFetcherCommand (fetch sales data daily via /GetNewestSales30Days)
+2. StatsCalculatorCommand (calculate statistics every 6 hours)
 3. Manually populate whitelisted_items table (20-30 items you've researched)
 4. Setup cron jobs
 
+**Commands:**
+```bash
+# Daily at 3 AM - Fetch historical sales
+0 3 * * * php /path/to/bin/console app:sales-history:fetch
+
+# Every 6 hours - Calculate statistics
+0 */6 * * * php /path/to/bin/console app:stats:calculate
+```
+
 **Test:**
 - Cron jobs running ✓
-- Data accumulating ✓
-- Redis cache populated ✓
+- Sales data accumulating in sale_history ✓
+- Stats calculated correctly ✓
 - Whitelist populated ✓
 
 **Run for 3-5 days to build history**
 
-**Deliverable:** Price database with 3-5 days of data, whitelist ready
+**Key Insight:** After 3-5 days, you'll have:
+- 180-300 sales records (for 30 liquid items)
+- 7-day and 30-day averages per item
+- Volatility metrics
+- Sales velocity data
+
+**Deliverable:** Sales database with 3-5 days of data, statistics ready, whitelist populated
 
 ---
 
@@ -826,20 +903,30 @@ Available = 100 - 20 - 10 = €70
 **Build:**
 1. BudgetManager service (track balance, enforce floors)
 2. RiskScorer service (calculate risk scores)
-3. BuyDecisionEngine service (full algorithm, all 9 checks)
+3. BuyDecisionEngine service (full algorithm, all 8 checks)
 4. SellDecisionEngine service (sell logic, all conditions)
 5. BuyOpportunityScannerCommand (dry-run only)
 6. SellOpportunityScannerCommand (dry-run only)
 
 **Test (Dry-Run Mode):**
 - Scanner finds opportunities ✓
+- Discounts calculated correctly ✓
 - Logs show decisions and reasons ✓
 - Review: Are decisions sensible? ✓
 - Tune thresholds ✓
 
 **Don't execute trades yet - just log decisions**
 
-**Deliverable:** Decision engines working, opportunities identified
+**Example Log Output:**
+```
+[INFO] Evaluating: AK-47 | Redline (Field-Tested) @ €28.00
+[DEBUG] Avg price (7d): €35.50
+[DEBUG] Discount: 21.1% (need 20%) - APPROVED
+[DEBUG] Risk score: 4.5 - APPROVED
+[INFO] Buy opportunity created - dispatching to queue (DRY-RUN)
+```
+
+**Deliverable:** Decision engines working, opportunities identified correctly
 
 ---
 
@@ -886,7 +973,11 @@ Available = 100 - 20 - 10 = €70
 
 **Run for 1-2 weeks**
 
-**Success:** 5+ trades, win rate >50%, no floor breaches
+**Success Criteria:**
+- 5+ trades
+- Win rate >50%
+- No floor breaches
+- Decision logic working correctly
 
 **Deliverable:** Bot trading successfully at small scale
 
@@ -897,8 +988,9 @@ Available = 100 - 20 - 10 = €70
 
 **Optimize:**
 1. Review logs for patterns
-2. Update whitelist (remove bad, add good items)
-3. Tune parameters (discounts, risk thresholds)
+2. Analyze which items are most profitable
+3. Update whitelist (remove bad, add good items)
+4. Tune parameters (discounts, risk thresholds)
 
 **Scale Budget:**
 - Week 6: €50 → €100
@@ -926,7 +1018,10 @@ Not every day has opportunities. Monthly view matters.
 ### 4. Stay Conservative
 Never breach floor. Maintain reserve. Diversify.
 
-### 5. Iterate
+### 5. Treat Wear Categories Separately
+Each wear category (FN/MW/FT/WW/BS) is a completely different item. Don't compare prices across categories.
+
+### 6. Iterate
 Review weekly, adjust parameters, continuous improvement.
 
 ---
@@ -934,7 +1029,7 @@ Review weekly, adjust parameters, continuous improvement.
 ## Expected Timeline
 
 **Week 1:** Foundation complete
-**Week 2:** Data collected
+**Week 2:** Sales data collected (3-5 days minimum)
 **Week 3:** Decision logic working
 **Week 4:** Queue system ready
 **Week 5:** First trades executed
@@ -952,6 +1047,7 @@ Review weekly, adjust parameters, continuous improvement.
 
 - Small consistent profits compound
 - Safety first, always
+- Each wear category is a separate item (don't compare FT to MW)
 - Log and learn
 - Iterate based on data
 - Scale gradually

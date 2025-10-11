@@ -64,6 +64,76 @@ class SkinBaronClient
     }
 
     /**
+     * Get sales history for a specific item (last 30 days)
+     * 
+     * @param string $itemName The item name to search for (e.g., "AK-47 | Redline (Field-Tested)")
+     * @param bool|null $statTrak Filter for StatTrak items (optional)
+     * @param bool|null $souvenir Filter for Souvenir items (optional)
+     * @param string|null $dopplerPhase Filter for specific Doppler phase (optional)
+     * @return array Array of sale records with price, wear, dateSold, etc.
+     */
+    public function getNewestSales30Days(
+        string $itemName,
+        ?bool $statTrak = null,
+        ?bool $souvenir = null,
+        ?string $dopplerPhase = null
+    ): array {
+        // Build cache key including all parameters
+        $cacheKey = 'skinbaron_sales_30d_' . md5($itemName . $statTrak . $souvenir . $dopplerPhase);
+
+        return $this->cache->get($cacheKey, function (ItemInterface $item) use (
+            $itemName,
+            $statTrak,
+            $souvenir,
+            $dopplerPhase
+        ): array {
+            // Cache for 1 hour - historical sales don't change frequently
+            $item->expiresAfter(3600);
+
+            // Build request parameters according to API spec
+            $params = [
+                'itemName' => $itemName  // REQUIRED parameter
+            ];
+
+            // Add optional filters if provided
+            if ($statTrak !== null) {
+                $params['statTrak'] = $statTrak;
+            }
+            if ($souvenir !== null) {
+                $params['souvenir'] = $souvenir;
+            }
+            if ($dopplerPhase !== null) {
+                $params['dopplerPhase'] = $dopplerPhase;
+            }
+
+            $this->logger->debug('Fetching 30-day sales history', [
+                'item' => $itemName,
+                'filters' => array_filter($params, fn($k) => $k !== 'itemName', ARRAY_FILTER_USE_KEY)
+            ]);
+
+            $data = $this->makeRequest('/GetNewestSales30Days', $params);
+
+            // API returns data wrapped in 'newestSales30Days' key
+            if (isset($data['newestSales30Days']) && is_array($data['newestSales30Days'])) {
+                $this->logger->info('Retrieved sales history', [
+                    'item' => $itemName,
+                    'sales_count' => count($data['newestSales30Days'])
+                ]);
+                
+                return $data['newestSales30Days'];
+            }
+
+            // Fallback: if structure is different, log and return empty
+            $this->logger->warning('Unexpected response format for GetNewestSales30Days', [
+                'item' => $itemName,
+                'response_keys' => array_keys($data)
+            ]);
+            
+            return [];
+        });
+    }
+
+    /**
      * Search for specific item
      */
     public function search(string $marketHashName, int $limit = 50, array $filters = []): array

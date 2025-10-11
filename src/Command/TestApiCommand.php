@@ -117,6 +117,101 @@ class TestApiCommand extends Command
                 $io->note('No items in inventory (this is normal if you haven\'t purchased anything yet)');
             }
 
+            // NEW TEST 6: Newest Sales (Last 30 Days) - THE CRITICAL ONE!
+            $io->section('Test 6: Get Newest Sales (Last 30 Days) - HISTORICAL DATA');
+            $io->info('Testing with popular item: "AK-47 | Redline (Field-Tested)"');
+
+            try {
+                $sales30Days = $this->skinBaronClient->getNewestSales30Days(
+                    itemName: 'AK-47 | Redline (Field-Tested)',
+                    statTrak: false
+                );
+                
+                $io->success('Received ' . count($sales30Days) . ' sales records from last 30 days');
+                
+                if (!empty($sales30Days)) {
+                    $io->info('This is the data we need for calculating averages and volatility!');
+                    $io->newLine();
+                    
+                    // Show sample of sales data
+                    $io->info('Sample of first 10 sales:');
+                    $salesTableData = [];
+                    foreach ($sales30Days as $sale) {
+                        $salesTableData[] = [
+                            $sale['itemName'] ?? 'Unknown',
+                            '€' . number_format($sale['price'] ?? 0, 2),
+                            isset($sale['wear']) ? number_format($sale['wear'], 4) : 'N/A',
+                            $sale['dateSold'] ?? 'N/A',
+                            $sale['dopplerPhase'] ?? '-'
+                        ];
+                    }
+                    
+                    $io->table(
+                        ['Item Name', 'Sale Price', 'Wear', 'Date Sold', 'Doppler Phase'],
+                        $salesTableData
+                    );
+                    
+                    // Calculate statistics
+                    if (count($sales30Days) >= 3) {
+                        $prices = array_column($sales30Days, 'price');
+                        $avgPrice = array_sum($prices) / count($prices);
+                        $minPrice = min($prices);
+                        $maxPrice = max($prices);
+                        
+                        // Calculate volatility (standard deviation)
+                        $variance = 0;
+                        foreach ($prices as $price) {
+                            $variance += pow($price - $avgPrice, 2);
+                        }
+                        $stdDev = sqrt($variance / count($prices));
+                        
+                        $io->newLine();
+                        $io->info('Statistics for AK-47 | Redline (Field-Tested):');
+                        $io->table(
+                            ['Metric', 'Value'],
+                            [
+                                ['Sales Count (30d)', count($sales30Days)],
+                                ['Average Price', '€' . number_format($avgPrice, 2)],
+                                ['Min Price', '€' . number_format($minPrice, 2)],
+                                ['Max Price', '€' . number_format($maxPrice, 2)],
+                                ['Volatility (StdDev)', '€' . number_format($stdDev, 2) . ' (' . number_format(($stdDev / $avgPrice) * 100, 1) . '%)'],
+                            ]
+                        );
+                        
+                        $io->newLine();
+                        $io->success('✓ This data is perfect for:');
+                        $io->listing([
+                            'Calculating 7-day and 30-day average prices',
+                            'Measuring price volatility (standard deviation)',
+                            'Tracking sales velocity (how often items sell)',
+                            'Verifying if items reach target prices historically',
+                            'Identifying liquid vs illiquid items'
+                        ]);
+                    }
+                    
+                } else {
+                    $io->warning('No sales data returned for this item');
+                    $io->info('Try testing with a different item name');
+                }
+                
+                // Test with another popular item
+                $io->newLine();
+                $io->info('Testing with another item: "AWP | Asiimov (Field-Tested)"');
+                
+                $awpSales = $this->skinBaronClient->getNewestSales30Days(
+                    itemName: 'AWP | Asiimov (Field-Tested)',
+                    statTrak: false
+                );
+                
+                $io->success('AWP Asiimov: ' . count($awpSales) . ' sales in last 30 days');
+                
+                $sales30DaysCount = count($sales30Days) + count($awpSales);
+                
+            } catch (\Exception $e) {
+                $io->error('Failed to fetch sales data: ' . $e->getMessage());
+                $sales30DaysCount = 0;
+            }
+
             // Summary
             $io->newLine();
             $io->success('✓ API client is working correctly!');
@@ -130,11 +225,22 @@ class TestApiCommand extends Command
                     ['Search (AK-47)', count($results) > 0 ? '✓ Passed' : '⚠ No results', count($results) . ' results'],
                     ['Search (Case)', count($caseResults) > 0 ? '✓ Passed' : '⚠ No results', count($caseResults) . ' results'],
                     ['Get Inventory', '✓ Passed', count($inventory) . ' items'],
+                    ['Historical Sales (30d)', count($sales30Days) > 0 ? '✓ Passed' : '⚠ No data', count($sales30Days) . ' sales'],
                 ]
             );
 
             $io->newLine();
-            $io->info('The API client is ready. You can now build the price scraper and trading logic.');
+            
+            // Decision based on Test 6 results
+            if (count($sales30Days) > 0) {
+                $io->success('✓ CRITICAL: Historical sales data is available!');
+                $io->info('You can skip the PriceScraperCommand and use this endpoint instead.');
+                $io->info('Build SalesHistoryFetcherCommand to fetch this data daily.');
+            } else {
+                $io->warning('⚠ No historical sales data available');
+                $io->info('You may need to implement PriceScraperCommand as a fallback.');
+                $io->info('Try testing with specific item parameters.');
+            }
 
             return Command::SUCCESS;
 
