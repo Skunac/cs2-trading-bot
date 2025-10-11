@@ -16,5 +16,21 @@ services:
     App\:
         resource: '../src/'
 
+    App\Service\SkinBaron\SkinBaronClient:
+        arguments:
+            $apiKey: '%env(SKINBARON_API_KEY)%'
+            $cache: '@cache.skinbaron_api'
+    
+    App\Command\DebugApiCommand:
+        arguments:
+            $apiKey: '%env(SKINBARON_API_KEY)%'
+    
+    App\Command\TestRedisCommand:
+        arguments:
+            $cacheApp: '@cache.app'
+            $cacheSkinbaronPrices: '@cache.skinbaron_prices'
+            $cacheSkinbaronStats: '@cache.skinbaron_stats'
+            $cacheSkinbaronApi: '@cache.skinbaron_api'
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
