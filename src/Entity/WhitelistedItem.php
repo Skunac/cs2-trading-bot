@@ -8,7 +8,7 @@ use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: WhitelistedItemRepository::class)]
 #[ORM\Table(name: 'whitelisted_items')]
-#[ORM\Index(columns: ['market_hash_name'], name: 'idx_market_hash_name')]
+#[ORM\Index(columns: ['market_hash_name'], name: 'idx_whitelisted_items_market_hash_name')]
 #[ORM\Index(columns: ['is_active'], name: 'idx_is_active')]
 #[ORM\Index(columns: ['tier'], name: 'idx_tier')]
 #[ORM\HasLifecycleCallbacks]

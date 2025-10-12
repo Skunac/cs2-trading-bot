@@ -8,7 +8,7 @@ use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: SaleHistoryRepository::class)]
 #[ORM\Table(name: 'sale_history')]
-#[ORM\Index(columns: ['market_hash_name', 'date_sold'], name: 'idx_market_date')]
+#[ORM\Index(columns: ['market_hash_name', 'date_sold'], name: 'idx_sale_market_date')]
 #[ORM\Index(columns: ['date_sold'], name: 'idx_date_sold')]
 #[ORM\Index(columns: ['fetched_at'], name: 'idx_fetched_at')]
 #[ORM\UniqueConstraint(name: 'unique_sale', columns: ['market_hash_name', 'date_sold', 'price'])]

@@ -8,8 +8,8 @@ use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: InventoryRepository::class)]
 #[ORM\Table(name: 'inventory')]
-#[ORM\Index(columns: ['market_hash_name'], name: 'idx_market_hash_name')]
-#[ORM\Index(columns: ['status'], name: 'idx_status')]
+#[ORM\Index(columns: ['market_hash_name'], name: 'idx_inventory_market_hash_name')]
+#[ORM\Index(columns: ['status'], name: 'idx_inventory_status')]
 #[ORM\Index(columns: ['purchase_date'], name: 'idx_purchase_date')]
 #[ORM\Index(columns: ['sold_date'], name: 'idx_sold_date')]
 #[ORM\HasLifecycleCallbacks]

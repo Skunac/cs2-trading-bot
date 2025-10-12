@@ -9,9 +9,9 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Entity(repositoryClass: TransactionRepository::class)]
 #[ORM\Table(name: 'transactions')]
 #[ORM\Index(columns: ['transaction_type'], name: 'idx_transaction_type')]
-#[ORM\Index(columns: ['market_hash_name'], name: 'idx_market_hash_name')]
+#[ORM\Index(columns: ['market_hash_name'], name: 'idx_transactions_market_hash_name')]
 #[ORM\Index(columns: ['transaction_date'], name: 'idx_transaction_date')]
-#[ORM\Index(columns: ['status'], name: 'idx_status')]
+#[ORM\Index(columns: ['status'], name: 'idx_transactions_status')]
 #[ORM\HasLifecycleCallbacks]
 class Transaction
 {
