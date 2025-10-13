@@ -25,8 +25,8 @@ services:
 ###> doctrine/doctrine-bundle ###
   database:
     ports:
-      - "5432"
+      - "5433:5432"
 ###< doctrine/doctrine-bundle ###
   redis: 
     ports:
-      - "6379"
+      - "6379:6379"
