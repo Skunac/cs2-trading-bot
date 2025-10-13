@@ -41,7 +41,6 @@ final class Version20251011204504 extends AbstractMigration
     public function down(Schema $schema): void
     {
         // this down() migration is auto-generated, please modify it to your needs
-        $this->addSql('CREATE SCHEMA public');
         $this->addSql('CREATE SEQUENCE price_history_id_seq INCREMENT BY 1 MINVALUE 1 START 1');
         $this->addSql('CREATE TABLE price_history (id SERIAL NOT NULL, market_hash_name VARCHAR(255) NOT NULL, price NUMERIC(10, 2) NOT NULL, listings_count INT DEFAULT NULL, "timestamp" TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, PRIMARY KEY(id))');
         $this->addSql('CREATE INDEX idx_market_timestamp ON price_history (market_hash_name, "timestamp")');

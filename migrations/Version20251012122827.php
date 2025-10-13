@@ -63,7 +63,5 @@ final class Version20251012122827 extends AbstractMigration
     {
         // Remove the test items
         $this->addSql("DELETE FROM whitelisted_items WHERE market_hash_name IN ('AK-47 | Redline (Field-Tested)', 'AWP | Asiimov (Field-Tested)')");
-        
-        $this->addSql('CREATE SCHEMA public');
     }
 }
