@@ -179,8 +179,7 @@ class SalesHistoryFetcherCommand extends Command
     {
         // Call API to get sales (last 30 days)
         $salesData = $this->skinBaronClient->getNewestSales30Days(
-            itemName: $marketHashName,
-            statTrak: false
+            itemName: $marketHashName
         );
 
         if (empty($salesData)) {

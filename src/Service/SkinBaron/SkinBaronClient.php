@@ -73,19 +73,13 @@ class SkinBaronClient
      * @return array Array of sale records with price, wear, dateSold, etc.
      */
     public function getNewestSales30Days(
-        string $itemName,
-        ?bool $statTrak = null,
-        ?bool $souvenir = null,
-        ?string $dopplerPhase = null
+        string $itemName
     ): array {
         // Build cache key including all parameters
-        $cacheKey = 'skinbaron_sales_30d_' . md5($itemName . $statTrak . $souvenir . $dopplerPhase);
+        $cacheKey = 'skinbaron_sales_30d_' . md5($itemName);
 
         return $this->cache->get($cacheKey, function (ItemInterface $item) use (
-            $itemName,
-            $statTrak,
-            $souvenir,
-            $dopplerPhase
+            $itemName
         ): array {
             // Cache for 1 hour - historical sales don't change frequently
             $item->expiresAfter(3600);
@@ -94,17 +88,6 @@ class SkinBaronClient
             $params = [
                 'itemName' => $itemName  // REQUIRED parameter
             ];
-
-            // Add optional filters if provided
-            if ($statTrak !== null) {
-                $params['statTrak'] = $statTrak;
-            }
-            if ($souvenir !== null) {
-                $params['souvenir'] = $souvenir;
-            }
-            if ($dopplerPhase !== null) {
-                $params['dopplerPhase'] = $dopplerPhase;
-            }
 
             $this->logger->debug('Fetching 30-day sales history', [
                 'item' => $itemName,
@@ -139,6 +122,8 @@ class SkinBaronClient
     public function search(string $marketHashName, int $limit = 50, array $filters = []): array
     {
         $cacheKey = 'skinbaron_search_' . md5($marketHashName . json_encode($filters));
+        $marketHashName = 'AK-47 | Redline';
+        // TODO extract the condition, the stattrak and the name and map the parameters
         
         return $this->cache->get($cacheKey, function (ItemInterface $item) use ($marketHashName, $limit, $filters): array {
             $item->expiresAfter(60); // 1 minute cache for searches
@@ -147,10 +132,14 @@ class SkinBaronClient
             $params = array_merge([
                 'search_item' => $marketHashName,
                 'items_per_page' => $limit,
-                'appid' => 730, // CS2/CSGO app ID
+                'appid' => 730, // CS2/CSGO app ID,
+                'minWear' => 0.0,
+                'maxWear' => 1.0,
+                'statTrak' => false
             ], $filters);
             
             $data = $this->makeRequest('/Search', $params);
+            dd($data);
 
             return $data['sales'] ?? [];
         });

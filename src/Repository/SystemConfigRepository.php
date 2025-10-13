@@ -34,6 +34,21 @@ class SystemConfigRepository extends ServiceEntityRepository
     }
 
     /**
+     * Get value as string (for bcmath operations)
+     */
+    public function getStringValue(string $key, string $default = '0.00'): string
+    {
+        $config = $this->findByKey($key);
+        
+        if (!$config) {
+            return $default;
+        }
+        
+        $value = $config->getValue();
+        return $value ?: $default;
+    }
+
+    /**
      * Set value by key (convenience method)
      */
     public function setValue(string $key, mixed $value): void
