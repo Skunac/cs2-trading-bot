@@ -122,28 +122,66 @@ class SkinBaronClient
     public function search(string $marketHashName, int $limit = 50, array $filters = []): array
     {
         $cacheKey = 'skinbaron_search_' . md5($marketHashName . json_encode($filters));
-        $marketHashName = 'AK-47 | Redline';
-        // TODO extract the condition, the stattrak and the name and map the parameters
-        
-        return $this->cache->get($cacheKey, function (ItemInterface $item) use ($marketHashName, $limit, $filters): array {
+
+        // Detect StatTrak
+        $isStatTrak = str_starts_with($marketHashName, 'StatTrak™');
+        $nameWithoutStatTrak = $isStatTrak ? trim(str_replace('StatTrak™', '', $marketHashName)) : $marketHashName;
+
+        // Extract weapon and condition
+        if (preg_match('/^(.*)\s\(([^)]+)\)$/', $nameWithoutStatTrak, $matches)) {
+            $weapon = trim($matches[1]);
+            $condition = $matches[2];
+        } else {
+            $weapon = $nameWithoutStatTrak;
+            $condition = null;
+        }
+
+        $minwear = 0.0;
+        $maxwear = 1.0;
+
+        switch ($condition) {
+            case 'Factory New':
+                $minwear = 0.0;
+                $maxwear = 0.07;
+                break;
+            case 'Minimal Wear':
+                $minwear = 0.07;
+                $maxwear = 0.15;
+                break;
+            case 'Field-Tested':
+                $minwear = 0.15;
+                $maxwear = 0.38;
+                break;
+            case 'Well-Worn':
+                $minwear = 0.38;
+                $maxwear = 0.45;
+                break;
+            case 'Battle-Scarred':
+                $minwear = 0.45;
+                $maxwear = 1.0;
+                break;
+            default:
+                break;
+        }
+
+        return $this->cache->get($cacheKey, function (ItemInterface $item) use ($weapon, $limit, $filters, $minwear, $maxwear, $isStatTrak): array {
             $item->expiresAfter(60); // 1 minute cache for searches
-            
+
             // Build search parameters according to API spec
             $params = array_merge([
-                'search_item' => $marketHashName,
+                'search_item' => $weapon,
                 'items_per_page' => $limit,
                 'appid' => 730, // CS2/CSGO app ID,
-                'minWear' => 0.0,
-                'maxWear' => 1.0,
-                'statTrak' => false
+                'minWear' => $minwear,
+                'maxWear' => $maxwear,
+                'stattrak' => $isStatTrak
             ], $filters);
-            
+
             $data = $this->makeRequest('/Search', $params);
-            dd($data);
 
             return $data['sales'] ?? [];
         });
-    } 
+    }
 
     /**
      * Purchase items by sale IDs
