@@ -117,7 +117,7 @@ class BuyOpportunityScannerCommand extends Command
                             $this->logger->info('[DRY-RUN] Buy opportunity found', $opportunity->toArray());
                         } else {
                             // Dispatch message to queue
-                            $message = new BuyOpportunity(
+                            $message = new BuyOpportunityMessage(
                                 saleId: $opportunity->saleId,
                                 marketHashName: $opportunity->marketHashName,
                                 currentPrice: $opportunity->currentPrice,

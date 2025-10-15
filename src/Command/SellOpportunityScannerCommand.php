@@ -2,7 +2,9 @@
 
 namespace App\Command;
 
+use App\Message\SellOpportunityMessage;
 use App\Repository\InventoryRepository;
+use App\Service\DTO\SellOpportunity;
 use App\Service\SellDecisionEngine;
 use App\Service\SkinBaron\SkinBaronClient;
 use Psr\Log\LoggerInterface;
@@ -12,6 +14,7 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use Symfony\Component\Messenger\MessageBusInterface;
 
 #[AsCommand(
     name: 'app:sell-opportunity:scan',
@@ -25,6 +28,7 @@ class SellOpportunityScannerCommand extends Command
         private readonly InventoryRepository $inventoryRepo,
         private readonly SellDecisionEngine $sellDecisionEngine,
         private readonly SkinBaronClient $skinBaronClient,
+        private readonly MessageBusInterface $messageBus,
         private readonly LoggerInterface $logger,
     ) {
         parent::__construct();
@@ -158,8 +162,18 @@ class SellOpportunityScannerCommand extends Command
                     if ($isDryRun) {
                         $this->logger->info('[DRY-RUN] Sell opportunity found', $opportunity->toArray());
                     } else {
-                        // TODO: In production, dispatch message here
-                        $this->logger->info('[PRODUCTION] Would dispatch sell opportunity', $opportunity->toArray());
+                        $message = new SellOpportunityMessage(
+                            inventoryId: $opportunity->inventoryId,
+                            saleId: $opportunity->saleId,
+                            marketHashName: $opportunity->marketHashName,
+                            action: $opportunity->action,
+                            listPrice: $opportunity->listPrice,
+                            reason: $opportunity->reason
+                        );
+                        
+                        $this->messageBus->dispatch($message);
+                        
+                        $this->logger->info('[PRODUCTION] Sell opportunity dispatched', $opportunity->toArray());
                     }
                 }
 
