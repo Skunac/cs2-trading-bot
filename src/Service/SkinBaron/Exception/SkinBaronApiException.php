@@ -7,7 +7,7 @@ class SkinBaronApiException extends \RuntimeException
     public function __construct(
         string $message,
         private readonly int $statusCode = 0,
-        private readonly ?array $responseData = null,
+        private readonly string|array|null $responseData = null,
         ?\Throwable $previous = null
     ) {
         parent::__construct($message, $statusCode, $previous);
@@ -18,7 +18,7 @@ class SkinBaronApiException extends \RuntimeException
         return $this->statusCode;
     }
 
-    public function getResponseData(): ?array
+    public function getResponseData(): string|array|null
     {
         return $this->responseData;
     }

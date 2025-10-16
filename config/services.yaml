@@ -31,6 +31,12 @@ services:
             $cacheSkinbaronPrices: '@cache.skinbaron_prices'
             $cacheSkinbaronStats: '@cache.skinbaron_stats'
             $cacheSkinbaronApi: '@cache.skinbaron_api'
+    
+    App\MessageHandler\BuyOpportunityHandler:
+        tags: [messenger.message_handler]
+
+    App\MessageHandler\SellOpportunityHandler:
+        tags: [messenger.message_handler]
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

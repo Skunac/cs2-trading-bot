@@ -63,7 +63,7 @@ class TransactionRepository extends ServiceEntityRepository
     public function getTotalVolumeInDateRange(
         \DateTimeInterface $startDate,
         \DateTimeInterface $endDate,
-        string $type = null
+        ?string $type = null
     ): string {
         $qb = $this->createQueryBuilder('t')
             ->select('SUM(ABS(t.netAmount))')
